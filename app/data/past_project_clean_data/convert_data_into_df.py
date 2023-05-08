@@ -1,7 +1,6 @@
 '''
 Converts msft_tweets_clean.csv data into a panda df
 '''
-import pickle
 import pandas as pd
 import os 
 dir_path = os.path.dirname(os.path.realpath(__file__))
