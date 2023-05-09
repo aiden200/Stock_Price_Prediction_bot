@@ -16,4 +16,12 @@ DIR: /past_project_clean_data
     File: convert_data_into_df.py
         Call load_clean_data_dictionary() to compress file into pickle
         Call load_file_from_pkl() to decrompress file into df
+
+
+DIR: /stock_price_data
+    File: full_msft_data.csv
+        Info: This dataset contains the daily msft data from 2000 till 2023
+    
+    File: av_load_data.py
+        Info: Contains functions importing the data and manipulating the data.
         
