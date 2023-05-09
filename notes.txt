@@ -1,0 +1,9 @@
+
+LSTMS predicting time series
+https://towardsdatascience.com/time-series-forecasting-with-deep-learning-in-pytorch-lstm-rnn-1ba339885f0c
+
+time series validation:
+https://medium.com/@soumyachess1496/cross-validation-in-time-series-566ae4981ce4
+
+
+farma mode:
