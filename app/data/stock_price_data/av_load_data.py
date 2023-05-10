@@ -1,4 +1,4 @@
-from alpha_vantage_keys import alpha_vantage_api_key
+from .alpha_vantage_keys import alpha_vantage_api_key
 import requests
 import pandas as pd
 import os
