@@ -32,14 +32,17 @@ def load_price_data(t = T, p = P, log=None):
     if log:
         log.info("Loading raw price data")
     try:
+        '''
+        TODO: we can also generate data using keras.utils.timeseries_dataset_from_array
+        '''
         df = pd.read_csv(f"{parent_path}/data/clean_price_msft.csv")
         raw_price_data = df.to_numpy()
         #columns are start date, open, high, low, close, adjusted close, volume
         raw_price_data = raw_price_data[:,2:]
         raw_price_data = raw_price_data.astype('float32')
-        # normalize features
         scaler = MinMaxScaler(feature_range=(0, 1))
         raw_price_data = scaler.fit_transform(raw_price_data)
+        # # normalize features
 
         test_seg = raw_price_data[-50:]
         train_seg = raw_price_data[:-51]
@@ -53,6 +56,7 @@ def load_price_data(t = T, p = P, log=None):
         while True:
             if (index + t + p) > len(train_seg):
                 break
+            # x_train.append(scaler.fit_transform(train_seg[index:index+t]))
             x_train.append(train_seg[index:index+t])
             y_train.append(train_seg[index+t:index+t+p][:,2])
             index += p
@@ -60,6 +64,7 @@ def load_price_data(t = T, p = P, log=None):
         while True:
             if (index + t + p) > len(test_seg):
                 break
+            # x_train.append(scaler.fit_transform(test_seg[index:index+t]))
             x_train.append(test_seg[index:index+t])
             y_train.append(test_seg[index+t:index+t+p][:,2])
             index += p
@@ -90,10 +95,11 @@ def one_layer_lstm_model(optimizer = "rmsprop", log=None):
     model.add(layers.LSTM(64, input_shape=(T, 6))) # 6 is each row size
     # model.add(layers.BatchNormalization())
     model.add(layers.Dense(P))
+    # we use a callback to save the best performing model
     model.compile(
-        loss="mae",
+        loss="mse",
         optimizer=optimizer,
-        metrics=["accuracy"],
+        metrics=["accuracy", "mae"]
     )	
 
     if log:
@@ -108,14 +114,38 @@ def train_model_1():
     # optimizer = "rmsprop"
     optimizer = "adam"
     model = one_layer_lstm_model(optimizer, log)
+    callbacks = [
+        keras.callbacks.ModelCheckpoint("one_layer_dense.keras",
+                                        save_best_only = True,
+                                        monitor='loss') 
+    ]
     history = model.fit(
-        x_train, y_train, validation_data=(x_test, y_test), batch_size=64, epochs=10
+        x_train, 
+        y_train, 
+        validation_data=(x_test, y_test), 
+        batch_size=64, 
+        epochs=10,
+        callbacks = callbacks
     )
+
+    model = keras.models.load_model("one_layer_dense.keras")
+    print(f"Test MAE: {model.evaluate(x_test, y_test)}")
+
     # print(history.history)
     plt.plot(history.history['loss'], label='loss')
     plt.plot(history.history['accuracy'], label='accuracy')
     plt.legend()
     plt.show()
+
+    yhat = model.predict(x_train)
+    # print(yhat)
+    plt.plot(range(len(y_train)), y_train, label="actual train")
+    plt.plot(range(len(yhat)), yhat, label="predicted train")
+    plt.legend()
+    plt.show()
+    # yhat2 = model.predict(x_test)
+    # plt.plot(range(len(y_test)), y_test, label="actual test")
+    # plt.plot(range(len(yhat2)), yhat2, label="predicted test")
 
 train_model_1()
 
