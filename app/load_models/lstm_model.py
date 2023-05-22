@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 
 T = 10
-P = 2
+P = 1
 
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -25,7 +25,10 @@ parent_path = path.parent.absolute()
 log.basicConfig(filename='log.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
 log.getLogger().setLevel(log.INFO)
 log.getLogger().setLevel(log.WARNING)
+# x_scaler = MinMaxScaler(feature_range=(0, 1))
+# y_scaler = MinMaxScaler(feature_range=(0, 1))
 scaler = MinMaxScaler(feature_range=(0, 1))
+
 
 def load_mnist_data():
     mnist = keras.datasets.mnist
@@ -46,6 +49,7 @@ def load_price_data(t = T, p = P, log=None):
         raw_price_data = raw_price_data[:,2:]
         raw_price_data = raw_price_data.astype('float32')
         raw_price_data = scaler.fit_transform(raw_price_data)
+
         # # normalize features
 
         test_seg = raw_price_data[-50:]
@@ -60,7 +64,9 @@ def load_price_data(t = T, p = P, log=None):
         while True:
             if (index + t + p) > len(train_seg):
                 break
-            # x_train.append(scaler.fit_transform(train_seg[index:index+t]))
+
+            # x_train.append(x_scaler.fit_transform(train_seg[index:index+t]))
+            # y_train.append(y_scaler.fit_transform(train_seg[index+t:index+t+p][:,2]))
             x_train.append(train_seg[index:index+t])
             y_train.append(train_seg[index+t:index+t+p][:,2])
             index += p
@@ -68,9 +74,10 @@ def load_price_data(t = T, p = P, log=None):
         while True:
             if (index + t + p) > len(test_seg):
                 break
-            # x_train.append(scaler.fit_transform(test_seg[index:index+t]))
-            x_train.append(test_seg[index:index+t])
-            y_train.append(test_seg[index+t:index+t+p][:,2])
+            # x_test.append(x_scaler.fit_transform(test_seg[index:index+t]))
+            # y_test.append(y_scaler.fit_transform(test_seg[index+t:index+t+p][:,2]))
+            x_test.append(test_seg[index:index+t])
+            y_test.append(test_seg[index+t:index+t+p][:,2])
             index += p
         x_train = np.array(x_train)
         y_train = np.array(y_train)
@@ -78,6 +85,8 @@ def load_price_data(t = T, p = P, log=None):
         y_test = np.array(y_test)
         log.info(f"Produced data. x_train shape: {x_train.shape}")
         print(f"Produced data. x_train shape: {x_train.shape}")
+        print(f"Produced data. x_test shape: {x_test.shape}")
+        print(f"Produced data. y_test shape: {y_test.shape}")
         return x_train, x_test, y_train, y_test
     except Exception as e:
         if log:
@@ -160,13 +169,13 @@ def train_model_1():
     plt.legend()
     plt.show()
 
-    yhat = model.predict(x_train)
-    print(yhat)
+    yhat = model.predict(x_test)
+    # print(x_test.shape, yhat.shape)
     # y_train = scaler.inverse_transform(y_train)
     # yhat = scaler.inverse_transform(yhat)
     plt.title('MSFT Stock Price Prediction')
-    plt.plot(range(len(y_train)), y_train, label="actual train")
-    plt.plot(range(len(yhat)), yhat, label="predicted train")
+    plt.plot(range(len(y_test)), y_test, label="actual test")
+    plt.plot(range(len(yhat)), yhat, label="predicted test")
     plt.legend()
     plt.show()
     # yhat2 = model.predict(x_test)
