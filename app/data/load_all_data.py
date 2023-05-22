@@ -39,7 +39,7 @@ def process_metrics_data(log, start_date, end_date, read_file="full_msft_quantat
         values = row[3].split("'")
         # each row appended as open, high, low, close, adjusted close, volume
         row_i = [row[1], float(values[3]), float(values[7]), float(values[11]), float(values[15]), float(values[19]), float(values[23])]
-        # currently with 3 num_metrics so the row values are [date, open, high, low, close, adjusted close, volume, EMA, MOM, SMA]
+        # currently with 3 num_metrics so the row values are [index, date, open, high, low, close, adjusted close, volume, EMA, MOM, SMA]
         for j in range(num_metrics):
             row_i.append(row[4+j])
         data.append(row_i)

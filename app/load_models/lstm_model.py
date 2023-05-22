@@ -1,6 +1,10 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+from keras.models import Sequential
+from keras.layers import LSTM
+from keras.layers import Dropout
+from keras.layers import Dense
 import pandas as pd
 import numpy as np
 import logging as log
@@ -92,7 +96,7 @@ def one_layer_lstm_model(optimizer = "rmsprop", log=None):
     if log:
         log.info("Loading LSTM model")
     model = keras.Sequential()
-    model.add(layers.LSTM(64, input_shape=(T, 6))) # 6 is each row size
+    model.add(layers.LSTM(64, input_shape=(T, 9))) # 6 is each row size
     # model.add(layers.BatchNormalization())
     model.add(layers.Dense(P))
     # we use a callback to save the best performing model
@@ -106,6 +110,25 @@ def one_layer_lstm_model(optimizer = "rmsprop", log=None):
         log.info(f"Loaded one layer LSTM model")
     return model
 
+def four_layer_lstm_model(optimizer="adam", log=None):
+    model = keras.Sequential()
+    model.add(LSTM(units=50,return_sequences=True,input_shape=(T, 9)))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=50,return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=50,return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=50))
+    model.add(Dropout(0.2))
+    model.add(Dense(units=P))
+    model.compile(
+        optimizer=optimizer,
+        loss='mean_squared_error',
+        metrics=["accuracy", "mse"])
+    if log:
+        log.info(f"Loaded four layer LSTM model")
+    return model
+
 
 def train_model_1():
     log.info("Starting training log")
@@ -113,7 +136,7 @@ def train_model_1():
     # x_train, x_test, y_train, y_test = load_mnist_data()
     # optimizer = "rmsprop"
     optimizer = "adam"
-    model = one_layer_lstm_model(optimizer, log)
+    model = four_layer_lstm_model(optimizer, log)
     callbacks = [
         keras.callbacks.ModelCheckpoint("one_layer_dense.keras",
                                         save_best_only = True,
@@ -128,8 +151,8 @@ def train_model_1():
         callbacks = callbacks
     )
 
-    model = keras.models.load_model("one_layer_dense.keras")
-    print(f"Test MAE: {model.evaluate(x_test, y_test)}")
+    # model = keras.models.load_model("one_layer_dense.keras")
+    # print(f"Test MAE: {model.evaluate(x_test, y_test)}")
 
     # print(history.history)
     plt.plot(history.history['loss'], label='loss')
