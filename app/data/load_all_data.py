@@ -7,6 +7,7 @@ log.getLogger().setLevel(log.INFO)
 log.getLogger().setLevel(log.WARNING)
 
 
+### WARNING: DEPRICATED FUNCTION, IN NO USE CURRENTLY ###
 def transform_price_data(log, start_date, end_date, read_file="stock_price_data/full_msft_price_data.csv", write_file="clean_price_msft.csv"):
     log.info("Function transform_price_data: Starting transforming price data")
     df = pd.read_csv(read_file)
@@ -25,11 +26,32 @@ def transform_price_data(log, start_date, end_date, read_file="stock_price_data/
     df.to_csv(write_file)
     log.info(f"created {write_file}")
 
+
+def process_metrics_data(log, start_date, end_date, read_file="full_msft_quantatative_metrics.csv", write_file="clean_price_msft.csv", num_metrics = 3):
+    log.info("Function transform_price_data: Starting transforming price data")
+    df = pd.read_csv(read_file)
+    df = df.to_numpy()
+    start_index = np.where(df==end_date)[0][0]
+    end_index = np.where(df==start_date)[0][0]
+    data = []
+    for i in range(start_index, end_index + 1):
+        row = df[i]
+        values = row[3].split("'")
+        # each row appended as open, high, low, close, adjusted close, volume
+        row_i = [float(values[3]), float(values[7]), float(values[11]), float(values[15]), float(values[19]), float(values[23])]
+        # currently with 3 num_metrics so the row values are [open, high, low, close, adjusted close, volume, EMA, MOM, SMA]
+        for j in range(num_metrics):
+            row_i.append(row[4+j])
+        data.append(row_i)
+    df = pd.DataFrame.from_dict(data)
+    df.to_csv(write_file)
+    log.info(f"created {write_file}")
+
 def transform_data(log):
 
     start_date = "2022-01-03"
     end_date = '2022-12-30'
-    transform_price_data(log, start_date, end_date)
+    process_metrics_data(log, start_date, end_date, num_metrics=3)
 
 
 def append_data(log, output_file = "full_msft_quantatative_metrics.csv", metrics=["EMA", "MOM", "SMA"]):
@@ -64,8 +86,6 @@ def append_data(log, output_file = "full_msft_quantatative_metrics.csv", metrics
         print(f"Failed in function append_data with error {e}")
 
 
-append_data(log)
-
 def load_all_data():
     log.info("Starting data collection")
     print("Loading all the data, please check data.log for details")
@@ -83,5 +103,5 @@ def load_all_data():
     transform_data(log)
     log.info("transformed data")
 
-# transform_data(log)
+transform_data(log)
 
