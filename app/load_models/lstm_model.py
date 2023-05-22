@@ -25,6 +25,7 @@ parent_path = path.parent.absolute()
 log.basicConfig(filename='log.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
 log.getLogger().setLevel(log.INFO)
 log.getLogger().setLevel(log.WARNING)
+scaler = MinMaxScaler(feature_range=(0, 1))
 
 def load_mnist_data():
     mnist = keras.datasets.mnist
@@ -44,7 +45,6 @@ def load_price_data(t = T, p = P, log=None):
         #columns are start date, open, high, low, close, adjusted close, volume
         raw_price_data = raw_price_data[:,2:]
         raw_price_data = raw_price_data.astype('float32')
-        scaler = MinMaxScaler(feature_range=(0, 1))
         raw_price_data = scaler.fit_transform(raw_price_data)
         # # normalize features
 
@@ -161,7 +161,10 @@ def train_model_1():
     plt.show()
 
     yhat = model.predict(x_train)
-    # print(yhat)
+    print(yhat)
+    # y_train = scaler.inverse_transform(y_train)
+    # yhat = scaler.inverse_transform(yhat)
+    plt.title('MSFT Stock Price Prediction')
     plt.plot(range(len(y_train)), y_train, label="actual train")
     plt.plot(range(len(yhat)), yhat, label="predicted train")
     plt.legend()
