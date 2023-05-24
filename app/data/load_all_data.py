@@ -1,10 +1,10 @@
-import logging as log
-from stock_price_data.av_load_data import *
+# import logging as log
+from .stock_price_data.av_load_data import *
 import numpy as np
 
-log.basicConfig(filename='data.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
-log.getLogger().setLevel(log.INFO)
-log.getLogger().setLevel(log.WARNING)
+# log.basicConfig(filename='data.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
+# log.getLogger().setLevel(log.INFO)
+# log.getLogger().setLevel(log.WARNING)
 
 
 ### WARNING: DEPRICATED FUNCTION, IN NO USE CURRENTLY ###
@@ -86,7 +86,7 @@ def append_data(log, output_file = "full_msft_quantatative_metrics.csv", metrics
         print(f"Failed in function append_data with error {e}")
 
 
-def load_all_data():
+def load_all_data(log):
     log.info("Starting data collection")
     print("Loading all the data, please check data.log for details")
 
@@ -107,5 +107,5 @@ def load_all_data():
     transform_data(log)
     log.info("transformed data")
 
-transform_data(log)
+# transform_data(log)
 

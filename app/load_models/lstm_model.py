@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from keras.models import Sequential
-from keras.layers import LSTM, RepeatVector, Dropout, Dense
+from keras.layers import LSTM, RepeatVector, Dropout, Dense, TimeDistributed
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras_tuner import HyperParameters
 from keras_tuner.tuners import RandomSearch
@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from matplotlib import pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+import math
 
 T = 10
 P = 1
@@ -40,7 +41,7 @@ def load_mnist_data():
 
 
 
-def load_price_data(t = T, p = P, log=None):
+def load_price_data(t = T, p = P, log=None, extended=False):
     if log:
         log.info("Loading raw price data")
     try:
@@ -55,11 +56,11 @@ def load_price_data(t = T, p = P, log=None):
         raw_price_data = scaler.fit_transform(raw_price_data)
 
         # # normalize features
-
-        test_seg = raw_price_data[-50:]
-        train_seg = raw_price_data[:-51]
-        warning_msg = f"Wrong length, train_seg expected 200, got {len(train_seg)}, test_seg expected 50, got {len(test_seg)}"
-        assert len(train_seg) == 200 and len(test_seg) == 50, warning_msg
+        test_n = math.floor(len(raw_price_data) * .2)
+        test_seg = raw_price_data[-test_n:]
+        train_seg = raw_price_data[:-test_n-1]
+        # warning_msg = f"Wrong length, train_seg expected 200, got {len(train_seg)}, test_seg expected 50, got {len(test_seg)}"
+        # assert len(train_seg) == 200 and len(test_seg) == 50, warning_msg
         x_train = []
         y_train = []
         x_test = []
@@ -72,7 +73,11 @@ def load_price_data(t = T, p = P, log=None):
             # x_train.append(x_scaler.fit_transform(train_seg[index:index+t]))
             # y_train.append(y_scaler.fit_transform(train_seg[index+t:index+t+p][:,2]))
             x_train.append(train_seg[index:index+t])
-            y_train.append(train_seg[index+t:index+t+p][:,2])
+            if extended:
+                y_train.append(train_seg[index+t:index+t+p])
+            else:
+                y_train.append(train_seg[index+t:index+t+p][:,2])
+
             index += p
         index = 0
         while True:
@@ -81,7 +86,10 @@ def load_price_data(t = T, p = P, log=None):
             # x_test.append(x_scaler.fit_transform(test_seg[index:index+t]))
             # y_test.append(y_scaler.fit_transform(test_seg[index+t:index+t+p][:,2]))
             x_test.append(test_seg[index:index+t])
-            y_test.append(test_seg[index+t:index+t+p][:,2])
+            if extended:
+                y_test.append(test_seg[index+t:index+t+p])
+            else:
+                y_test.append(test_seg[index+t:index+t+p][:,2])
             index += p
         x_train = np.array(x_train)
         y_train = np.array(y_train)
@@ -96,6 +104,8 @@ def load_price_data(t = T, p = P, log=None):
         if log:
             log.warning(f"Error in function load_price_data with error: {e}")
         return None
+    
+
 
 def plot_price_data(log=None):
     price_data = load_price_data()
@@ -127,13 +137,13 @@ def four_layer_lstm_model(optimizer="adam", log=None):
     model = keras.Sequential()
     model.add(LSTM(units=50,return_sequences=True,input_shape=(T, n_features)))
     model.add(Dropout(0.2))
-    model.add(LSTM(units=50,return_sequences=True))
+    model.add(LSTM(units=50,return_sequences=True,input_shape=(T, n_features)))
     model.add(Dropout(0.2))
-    model.add(LSTM(units=50,return_sequences=True))
+    model.add(LSTM(units=50,return_sequences=True,input_shape=(T, n_features)))
     model.add(Dropout(0.2))
-    model.add(LSTM(units=50))
+    model.add(LSTM(units=50,return_sequences=True,input_shape=(T, n_features)))
     model.add(Dropout(0.2))
-    model.add(Dense(units=P))
+    model.add(TimeDistributed(Dense(n_features)))
     model.compile(
         optimizer=optimizer,
         loss='mean_squared_error',
@@ -145,7 +155,7 @@ def four_layer_lstm_model(optimizer="adam", log=None):
 
 def train_model_1():
     log.info("Starting training log")
-    x_train, x_test, y_train, y_test = load_price_data(log=log)
+    x_train, x_test, y_train, y_test = load_price_data(log=log, extended=True)
     # x_train, x_test, y_train, y_test = load_mnist_data()
     # optimizer = "rmsprop"
     optimizer = "adam"
@@ -175,18 +185,19 @@ def train_model_1():
 
     yhat = model.predict(x_test)
     # print(x_test.shape, yhat.shape)
-    # y_train = scaler.inverse_transform(y_train)
-    # yhat = scaler.inverse_transform(yhat)
+    y_test = scaler.inverse_transform(y_test)
+    yhat = scaler.inverse_transform(yhat)
+    print(yhat.shape, yhat)
     plt.title('MSFT Stock Price Prediction')
-    plt.plot(range(len(y_test)), y_test, label="actual test")
-    plt.plot(range(len(yhat)), yhat, label="predicted test")
+    plt.plot(range(len(y_test)), y_test[0], label="actual test")
+    plt.plot(range(len(yhat)), yhat[0], label="predicted test")
     plt.legend()
     plt.show()
     # yhat2 = model.predict(x_test)
     # plt.plot(range(len(y_test)), y_test, label="actual test")
     # plt.plot(range(len(yhat2)), yhat2, label="predicted test")
 
-# train_model_1()
+train_model_1()
 
 # hp stands for hyperparameters
 def build_model(hp):
@@ -242,7 +253,7 @@ def build_model(hp):
     
     return model
 
-def save_best_model():
+def save_best_model(log):
     log.info("Starting training log")
     x_train, x_test, y_train, y_test = load_price_data(log=log)
 
@@ -274,5 +285,5 @@ def save_best_model():
     loss = best_model.evaluate(x_test, y_test)
     print(loss)
 
-save_best_model()
+# save_best_model(log)
 
