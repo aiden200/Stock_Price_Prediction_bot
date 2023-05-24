@@ -2,9 +2,10 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from keras.models import Sequential
-from keras.layers import LSTM
-from keras.layers import Dropout
-from keras.layers import Dense
+from keras.layers import LSTM, RepeatVector, Dropout, Dense
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras_tuner import HyperParameters
+from keras_tuner.tuners import RandomSearch
 import pandas as pd
 import numpy as np
 import logging as log
@@ -15,6 +16,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 T = 10
 P = 1
+n_features = 9
 
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -35,6 +37,8 @@ def load_mnist_data():
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
     x_train, x_test = x_train/255.0, x_test/255.0
     return x_train, x_test, y_train, y_test
+
+
 
 def load_price_data(t = T, p = P, log=None):
     if log:
@@ -105,7 +109,7 @@ def one_layer_lstm_model(optimizer = "rmsprop", log=None):
     if log:
         log.info("Loading LSTM model")
     model = keras.Sequential()
-    model.add(layers.LSTM(64, input_shape=(T, 9))) # 6 is each row size
+    model.add(layers.LSTM(64, input_shape=(T, n_features))) # 6 is each row size
     # model.add(layers.BatchNormalization())
     model.add(layers.Dense(P))
     # we use a callback to save the best performing model
@@ -121,7 +125,7 @@ def one_layer_lstm_model(optimizer = "rmsprop", log=None):
 
 def four_layer_lstm_model(optimizer="adam", log=None):
     model = keras.Sequential()
-    model.add(LSTM(units=50,return_sequences=True,input_shape=(T, 9)))
+    model.add(LSTM(units=50,return_sequences=True,input_shape=(T, n_features)))
     model.add(Dropout(0.2))
     model.add(LSTM(units=50,return_sequences=True))
     model.add(Dropout(0.2))
@@ -182,5 +186,93 @@ def train_model_1():
     # plt.plot(range(len(y_test)), y_test, label="actual test")
     # plt.plot(range(len(yhat2)), yhat2, label="predicted test")
 
-train_model_1()
+# train_model_1()
+
+# hp stands for hyperparameters
+def build_model(hp):
+    model = Sequential()
+    
+    # number of dense layer
+    dense = hp.Int("n_dense",
+                  min_value=0,
+                  max_value=3)
+
+    # first LSTM-layer
+    model.add(LSTM(units=hp.Int("n_units1",
+                               min_value=32,
+                               max_value=512,
+                               step=16
+                               ),
+                  input_shape=(T, n_features)))
+    
+
+    # model.add(RepeatVector(n_steps_out))
+    if dense > 0:
+        for layer in range(dense):
+            model.add(Dropout(hp.Float("v_dropout_dense" + str(layer + 1),
+                                        min_value = 0.05,
+                                        max_value = 0.2,
+                                        step = 0.05)))
+            model.add(Dense(units=hp.Int("n_units_dense" + str(layer + 1),
+                                        min_value = 32,
+                                        max_value = 512,
+                                        step = 16),
+                            activation=hp.Choice("v_activation_dense",
+                                                values=["relu", "tanh", "sigmoid"],
+                                                default="relu")))
+    
+    model.add(Dropout(hp.Float("v_dropout",
+                              min_value=0.05,
+                              max_value=0.2,
+                              step=0.05)))
+    
+    # model.add(LSTM(units=hp.Int("n_units2",
+    #                            min_value=32,
+    #                            max_value=256,
+    #                            step=16),
+    #               return_sequences = True))
+
+    # model.add(TimeDistributed(Dense(n_features)))
+    model.add(Dense(n_features))
+
+    model.compile(optimizer = "adam",
+                 loss = "mean_absolute_error",
+                 metrics=["accuracy", "mse"]
+                 )
+    
+    return model
+
+def save_best_model():
+    log.info("Starting training log")
+    x_train, x_test, y_train, y_test = load_price_data(log=log)
+
+    tuner = RandomSearch(build_model,
+                     objective="val_loss",
+                     max_trials=3,
+                     seed=9999,
+                     executions_per_trial=5, # try 5, 10, 20
+                     directory="",
+                     project_name="RandomSearch_Multistep")
+
+    early_stopping_cb = EarlyStopping(patience=15, restore_best_weights=True)
+
+    tuner.search(x_train, 
+                y_train, 
+                epochs=500, 
+                batch_size=16, 
+                validation_split=0.25,
+                callbacks=[early_stopping_cb],
+                verbose=1)
+
+    # Retrieve the best model
+    best_model = tuner.get_best_models(num_models=1)[0]
+
+    # save best model for that variable combination
+    best_model.save("best_model_multistep_sentiment.h5")
+
+    # Evaluate the best model with test data
+    loss = best_model.evaluate(x_test, y_test)
+    print(loss)
+
+save_best_model()
 

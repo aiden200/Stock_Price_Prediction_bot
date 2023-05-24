@@ -104,6 +104,6 @@ def import_article_data(ticker="msft", log=None):
             log.warning(f"import_article_data: FAILED with error: {e}")
 
 
-
-import_article_data()
+if __name__ == "__main__":
+    import_article_data()
 
