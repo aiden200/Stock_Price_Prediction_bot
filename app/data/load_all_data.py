@@ -49,7 +49,7 @@ def process_metrics_data(log, start_date, end_date, read_file="full_msft_quantat
 
 def transform_data(log):
 
-    start_date = "2022-01-03"
+    start_date = "2019-01-03"
     end_date = '2022-12-30'
     process_metrics_data(log, start_date, end_date, num_metrics=3)
 
@@ -98,6 +98,10 @@ def load_all_data():
     log.info("Loading article data")
     import_article_data(log)
     log.info("Article data created")
+
+    log.info("Appending different quantatative data")
+    append_data(log = log)
+    log.info("Data appended")
     
     log.info("starting transforming data")
     transform_data(log)
