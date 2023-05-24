@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import LSTM, RepeatVector, Dropout, Dense, TimeDistributed
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras_tuner import HyperParameters
@@ -16,7 +16,7 @@ from sklearn.preprocessing import MinMaxScaler
 import math
 
 T = 10
-P = 1
+P = 30
 n_features = 9
 
 
@@ -41,7 +41,7 @@ def load_mnist_data():
 
 
 
-def load_price_data(t = T, p = P, log=None, extended=False):
+def load_price_data(t = T, p = P, log=None, extended=True):
     if log:
         log.info("Loading raw price data")
     try:
@@ -69,7 +69,6 @@ def load_price_data(t = T, p = P, log=None, extended=False):
         while True:
             if (index + t + p) > len(train_seg):
                 break
-
             # x_train.append(x_scaler.fit_transform(train_seg[index:index+t]))
             # y_train.append(y_scaler.fit_transform(train_seg[index+t:index+t+p][:,2]))
             x_train.append(train_seg[index:index+t])
@@ -95,12 +94,16 @@ def load_price_data(t = T, p = P, log=None, extended=False):
         y_train = np.array(y_train)
         x_test = np.array(x_test)
         y_test = np.array(y_test)
-        log.info(f"Produced data. x_train shape: {x_train.shape}")
+        if log:
+            log.info(f"Produced data. x_train shape: {x_train.shape}")
         print(f"Produced data. x_train shape: {x_train.shape}")
+        print(f"Produced data. y_train shape: {y_train.shape}")
         print(f"Produced data. x_test shape: {x_test.shape}")
         print(f"Produced data. y_test shape: {y_test.shape}")
         return x_train, x_test, y_train, y_test
     except Exception as e:
+        print(e)
+        print("Cannot load data")
         if log:
             log.warning(f"Error in function load_price_data with error: {e}")
         return None
@@ -160,44 +163,59 @@ def train_model_1():
     # optimizer = "rmsprop"
     optimizer = "adam"
     model = four_layer_lstm_model(optimizer, log)
-    callbacks = [
-        keras.callbacks.ModelCheckpoint("one_layer_dense.keras",
+    checkpoint_path = "best_model.hdf5"
+    checkpoint = [
+        keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                        monitor="val_loss",
                                         save_best_only = True,
-                                        monitor='loss') 
+                                        mode='min') 
     ]
-    history = model.fit(
-        x_train, 
-        y_train, 
-        validation_data=(x_test, y_test), 
-        batch_size=64, 
-        epochs=10,
-        callbacks = callbacks
-    )
+    earlystopping = EarlyStopping(monitor='val_loss', patience=50, restore_best_weights=True, verbose=0)
+    callbacks = [checkpoint, earlystopping]
 
-    # model = keras.models.load_model("one_layer_dense.keras")
-    # print(f"Test MAE: {model.evaluate(x_test, y_test)}")
-
-    # print(history.history)
-    plt.plot(history.history['loss'], label='loss')
-    plt.plot(history.history['accuracy'], label='accuracy')
-    plt.legend()
-    plt.show()
-
-    yhat = model.predict(x_test)
-    # print(x_test.shape, yhat.shape)
-    y_test = scaler.inverse_transform(y_test)
-    yhat = scaler.inverse_transform(yhat)
-    print(yhat.shape, yhat)
+    # Training the model
+    epochs = 500
+    batch_size = 32
+    history = model.fit(x_train, y_train,
+                        batch_size=batch_size, 
+                        epochs=epochs,
+                        validation_data=(x_test, y_test),
+                        callbacks = callbacks,
+                        verbose = 1)
+    
+    plt.figure(figsize=(16,7))
     plt.title('MSFT Stock Price Prediction')
-    plt.plot(range(len(y_test)), y_test[0], label="actual test")
-    plt.plot(range(len(yhat)), yhat[0], label="predicted test")
+    plt.plot(history.history['loss'], label='train')
+    plt.plot(history.history['val_loss'], label='test')
     plt.legend()
     plt.show()
-    # yhat2 = model.predict(x_test)
-    # plt.plot(range(len(y_test)), y_test, label="actual test")
-    # plt.plot(range(len(yhat2)), yhat2, label="predicted test")
 
-train_model_1()
+    
+    
+    model_from_saved_checkpoint = load_model(checkpoint_path)
+    y_hat= model_from_saved_checkpoint.predict(x_test)
+
+    
+
+    
+    y_hat_open = np.array([scaler.inverse_transform(item)[:,0] for item in y_hat])
+    y_true_open = np.array([scaler.inverse_transform(item)[:,0] for item in y_test])
+    print(y_hat.shape)
+    print(y_hat_open.shape)
+    print(y_test.shape)
+    print(y_true_open.shape)
+
+    plt.plot(y_true_open[:,0], label='True')
+    plt.plot(y_hat_open[:,0], label='LSTM')
+    plt.title("LSTM's_Prediction")
+    plt.xlabel('Time steps')
+    plt.ylabel('Prices')
+    plt.legend()
+    plt.show()
+
+
+
+# train_model_1()
 
 # hp stands for hyperparameters
 def build_model(hp):
@@ -217,7 +235,7 @@ def build_model(hp):
                   input_shape=(T, n_features)))
     
 
-    # model.add(RepeatVector(n_steps_out))
+    model.add(RepeatVector(P))
     if dense > 0:
         for layer in range(dense):
             model.add(Dropout(hp.Float("v_dropout_dense" + str(layer + 1),
@@ -237,14 +255,14 @@ def build_model(hp):
                               max_value=0.2,
                               step=0.05)))
     
-    # model.add(LSTM(units=hp.Int("n_units2",
-    #                            min_value=32,
-    #                            max_value=256,
-    #                            step=16),
-    #               return_sequences = True))
+    model.add(LSTM(units=hp.Int("n_units2",
+                               min_value=32,
+                               max_value=256,
+                               step=16),
+                  return_sequences = True))
 
-    # model.add(TimeDistributed(Dense(n_features)))
-    model.add(Dense(n_features))
+    model.add(TimeDistributed(Dense(n_features)))
+    # model.add(Dense(n_features))
 
     model.compile(optimizer = "adam",
                  loss = "mean_absolute_error",
@@ -253,17 +271,17 @@ def build_model(hp):
     
     return model
 
-def save_best_model(log):
+def save_best_model(log, best_model_path):
     log.info("Starting training log")
     x_train, x_test, y_train, y_test = load_price_data(log=log)
 
     tuner = RandomSearch(build_model,
                      objective="val_loss",
-                     max_trials=3,
+                     max_trials=5,
                      seed=9999,
-                     executions_per_trial=5, # try 5, 10, 20
+                     executions_per_trial=20, # try 5, 10, 20
                      directory="",
-                     project_name="RandomSearch_Multistep")
+                     project_name="RandomSearch_Multistep2")
 
     early_stopping_cb = EarlyStopping(patience=15, restore_best_weights=True)
 
@@ -279,11 +297,70 @@ def save_best_model(log):
     best_model = tuner.get_best_models(num_models=1)[0]
 
     # save best model for that variable combination
-    best_model.save("best_model_multistep_sentiment.h5")
+    best_model.save(best_model_path)
 
     # Evaluate the best model with test data
     loss = best_model.evaluate(x_test, y_test)
     print(loss)
 
-# save_best_model(log)
+
+
+def train_weights_on_best_model(checkpoint_path, model_path=f"{dir_path}/best_model_multistep2.h5", log=None):
+    x_train, x_test, y_train, y_test = load_price_data(log=log, extended=True)
+    model = load_model(model_path)
+    checkpoint = [
+        keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                        monitor="val_loss",
+                                        save_best_only = True,
+                                        mode='min') 
+    ]
+    earlystopping = EarlyStopping(monitor='val_loss', patience=50, restore_best_weights=True, verbose=0)
+    callbacks = [checkpoint, earlystopping]
+
+    # Training the model
+    epochs = 500
+    batch_size = 32
+    history = model.fit(x_train, y_train,
+                        batch_size=batch_size, 
+                        epochs=epochs,
+                        validation_data=(x_test, y_test),
+                        callbacks = callbacks,
+                        verbose = 1)
+    
+    return f"{dir_path}/{checkpoint_path}"
+
+def predict_using_weighted_model(x, checkpoint_path, y=None, log=None):
+    model_from_saved_checkpoint = load_model(checkpoint_path)
+    y_hat= model_from_saved_checkpoint.predict(x)
+    
+    y_hat_open = np.array(scaler.inverse_transform(y_hat[0]))[:,0]
+    y_true_open = np.array(scaler.inverse_transform(y[0]))[:,0]
+    # y_hat_open = np.array([item[:,0] for item in y_hat])
+    # y_true_open = np.array([item[:,0] for item in y])
+    # y_hat_open = np.array([scaler.inverse_transform(item)[:,0] for item in y_hat])
+    # y_true_open = np.array([scaler.inverse_transform(item)[:,0] for item in y])
+    print(y_hat.shape)
+    print(y_hat_open.shape)
+    print(y.shape)
+    print(y_true_open.shape)
+
+    plt.plot(y_true_open, label='True')
+    plt.plot(y_hat_open, label='LSTM')
+    plt.title("LSTM's_Prediction")
+    plt.xlabel('Time steps')
+    plt.ylabel('Prices')
+    plt.legend()
+    plt.show()
+
+if __name__=="__main__":
+    best_model_path = "best_model_multistep2.h5"
+    if not os.path.exists(best_model_path):
+        print("Loading new LSTM model with hp")
+        save_best_model(log=log, best_model_path=best_model_path)
+    checkpoint_path = "best_model2.hdf5"
+    if not os.path.exists(checkpoint_path):
+        print("Loading new checkpoint model")
+        checkpoint_path = train_weights_on_best_model(checkpoint_path=checkpoint_path, model_path = best_model_path, log = log)
+    _, x, _, y = load_price_data(log=log, extended=True)
+    predict_using_weighted_model(x=x,y=y, checkpoint_path = checkpoint_path)
 
